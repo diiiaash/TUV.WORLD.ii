@@ -1,0 +1,587 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta charset="UTF-8">
+    <title>TUV.WORLD - Словарь</title>
+    <link rel="stylesheet" href="style/styles.css" />
+</head>
+<body>
+    <nav class="navbar">
+        <a href="index.html" class="logo">TUV.WORLD</a>
+        <div class="nav-links">
+            <a href="index.html">Cловарь</a>
+            <a href="html/media.html">Медиа</a>
+            <a href="html/upra.html">Викторина</a>
+        </div>
+    </nav>
+
+    <section class="hero">
+        <img src="media/главная1.webp" alt="TUV.WORLD" />
+        <h1>TUV.WORLD</h1>
+    </section>
+
+    <section class="alphabet-container">
+        <!-- поисковикс слов -->
+        <input type="text" id="searchInput" onkeyup="search()" placeholder="Поиск..." class="searchInput">
+        <!-- Блок семантического (умного) поиска -->
+        <div class="semantic-search-section" style="margin: 2rem 0; padding: 1.5rem; background: #f5f7f0; border-radius: 12px;">
+            <h3 style="color: #8A9A5B;"Поиск с ии</h3>
+            <p style="margin-bottom: 1rem;">Напишите слово или фразу на русском</p>
+
+            <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+                <input type="text" id="semanticInput" placeholder="..."
+                       style="flex: 1; padding: 0.8rem; border: 2px solid #8A9A5B; border-radius: 8px; font-size: 1rem;">
+                <button id="semanticSearchBtn"
+                        style="background: #8A9A5B; color: white; border: none; padding: 0.8rem 1.5rem; border-radius: 8px; cursor: pointer;">
+                    Искать по смыслу
+                </button>
+            </div>
+
+            <div id="semanticResults" style="margin-top: 1rem;"></div>
+        </div>
+
+        <style>
+            .semantic-result-item {
+                background: white;
+                padding: 0.8rem;
+                margin: 0.5rem 0;
+                border-radius: 8px;
+                border-left: 4px solid #8A9A5B;
+                transition: all 0.2s ease;
+            }
+                .semantic-result-item:hover {
+                    transform: translateX(5px);
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                }
+
+            .semantic-word {
+                font-weight: bold;
+                font-size: 1.1rem;
+                color: #4a5a1a;
+            }
+            .semantic-translation {
+                color: #666;
+                font-size: 0.9rem;
+                margin-top: 0.3rem;
+            }
+
+            .semantic-similarity {
+                font-size: 0.75rem;
+                color: #8A9A5B;
+                margin-top: 0.3rem;
+            }
+
+            .loading {
+                text-align: center;
+                padding: 1rem;
+                color: #8A9A5B;
+            }
+
+            .no-results {
+                text-align: center;
+                padding: 1rem;
+                color: #999;
+            }
+
+            .error {
+                text-align: center;
+                padding: 1rem;
+                color: #d9534f;
+                background: #f2dede;
+                border-radius: 8px;
+            }
+        </style>
+
+        <script>
+            const semanticInput = document.getElementById('semanticInput');
+            const semanticBtn = document.getElementById('semanticSearchBtn');
+            const semanticResults = document.getElementById('semanticResults');
+
+            async function semanticSearch() {
+                const query = semanticInput.value.trim();
+                if (!query) {
+                    semanticResults.innerHTML = '<div class="no-results">Введите слово или фразу для поиска</div>';
+                    return;
+                }
+
+                semanticResults.innerHTML = '<div class="loading">Пожалуйста, подождите</div>';
+
+                try {
+                    // Отправляем запрос к вашему серверу
+                    const response = await fetch('http://localhost:8001/search', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ query: query, max_results: 3 })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`Ошибка сервера: ${response.status}`);
+                    }
+
+                    const data = await response.json();
+
+                    if (data.results && data.results.length > 0) {
+                        let html = '<div style="margin-top: 0.5rem;">';
+                        for (const res of data.results) {
+                            let word = '';
+                            try {
+                                const meta = JSON.parse(res.metadata);
+                                word = meta.word || '';
+                            } catch (e) {
+                                const match = res.text.match(/^([^—]+)/);
+                                word = match ? match[1].trim() : '';
+                            }
+
+                            const percent = Math.round(res.similarity * 15);
+
+                            html += `
+                                <div class="semantic-result-item" onclick="searchByWord('${word}')" style="cursor: pointer;">
+                                    <div class="semantic-word"> ${word || 'Слово'}</div>
+                                    <div class="semantic-translation">${res.text.substring(0, 150)}${res.text.length > 150 ? '...' : ''}</div>
+                                    <div class="semantic-similarity">Совпадение по смыслу: ${percent}%</div>
+                                </div>
+                            `;
+                        }
+                        html += '</div>';
+                        semanticResults.innerHTML = html;
+                    } else {
+                        semanticResults.innerHTML = '<div class="no-results"> Ничего не найдено. Попробуйте другие слова.</div>';
+                    }
+                } catch (error) {
+                    console.error('Ошибка:', error);
+                    semanticResults.innerHTML = '<div class="error"> Ошибка подключения к серверу поиска. Убедитесь, что сервер запущен (python server.py).</div>';
+                }
+            }
+            function searchByWord(word) {
+                const searchInput = document.querySelector('.searchInput');
+                if (searchInput) {
+                    searchInput.value = word;
+                    if (typeof search === 'function') {
+                        search();
+                    }
+                    const wordList = document.getElementById('wordList');
+                    if (wordList) {
+                        wordList.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                }
+            }
+
+            semanticBtn.addEventListener('click', semanticSearch);
+            semanticInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') semanticSearch();
+            });
+        </script>
+
+        <!-- слова на тув -->
+        <ul id="wordList" class="word-list" style="list-style: none;">
+            <li onclick="showExplanation('Аң')"><b>Аң</b> — зверь / араатан аң-хищный зверь / аң изи-звериный след.</li>
+            <li onclick="showExplanation('Аазадаш')"><b>Аазадаш</b> — бичии када ажыттына хона бээр – приоткрываться ненадолго.</li>
+            <li onclick="showExplanation('Аазакчы')"><b>Аазакчы</b> — кандыг-бир чүвени бээр азы кылыр бооп аазаан кижи – тот, кто обещает или обещал.</li>
+            <li onclick="showExplanation('Аайлаар')"><b>Аайлаар</b> — чүвелерни бир аай чурумнуг, эмге-сескелиг болдурар – приводить в порядок.</li>
+            <li onclick="showExplanation('Аак-маак')"><b>Аак-маак</b> — мырыңай үр болбаанда, ол-ла дораан – в миг, в мгновение ока.</li>
+            <li onclick="showExplanation('Аалчы')"><b>Аалчы</b> — чуртка, аалга, бажыңга келген кижи – гость. Аалчы кижи алыскак, анайлыг өшкү өдүген.</li>
+            <li onclick="showExplanation('Аас-кежик')"><b>Аас-кежик </b> — кижиниң амыдыралында бүгү чүвеге бүрүнү-биле таарзынган байдал – счастье.</li>
+            <li onclick="showExplanation('Ажал')"><b>Ажал</b> — кандыг-бир кижиниң багай чүве кылганынга удур харыы, өжээн – месть.</li>
+            <li onclick="showExplanation('Албанчы')"><b>Албанчы</b> — албан даалгазы күүседип чоруур кижи – тот, кто выполняет служебные поручения.</li>
+            <li onclick="showExplanation('Анай-кара')"><b>Анай-кара</b> — ынак кижизи – любимый человек. Анай-кара кады чорда, агым мен дээш суглар канчаар.</li>
+            <li onclick="showExplanation('Анай-хаак')"><b>Анай-хаак </b> — тал аймааның дүктүгүр хоюг боралдыг мочургазы азы часты берген сарыг чечээ – пушистая почка вербы или сережка у ивы.</li>
+            <li onclick="showExplanation('Аа-чаза')"><b>Аа-чаза</b> — беспощадно, нещадно, жестоко / дайзынны аа-чаза согар-беспощадно бить врага.</li>
+            <li onclick="showExplanation('Аажок')"><b>Аажок</b> — очень, сильно, необычайно / шөлде улус аажок хөй- на площади очень много народа.</li>
+            <li onclick="showExplanation('Аажылаар')"><b>Аажылаар</b> —  обращаться с кем-чем-либо, относиться к кому-чему-либо (каким-либо образом) / эки аажылаар- хорошо обращаться.</li>
+            <li onclick="showExplanation('Аажылаашкын')"><b>Аажылаашкын</b> — поступок / эки аажылаашкын- добрый поступок.</li>
+            <li onclick="showExplanation('Аажы-чаң')"><b>Аажы-чаң</b> — характер; манера; поведение / кадыг аажы-чаң - крутой нрав.</li>
+            <li onclick="showExplanation('Аазаар')"><b>Аазаар</b> — обещать, сулить / бир-тээ аазаан соонда, күүседир апаар - раз обещал, надо выполнить.</li>
+            <li onclick="showExplanation('Аайлажыр')"><b>Аайлажыр</b> — приводить вместе (совместно) в порядок / аайлажып бээр - помочь привести в порядок.</li>
+            <li onclick="showExplanation('Аал')"><b>Аал</b> — селение; табор / аал коданы - территория аала.</li>
+            <li onclick="showExplanation('Аалдаар')"><b>Аалдаар</b> — гостить / төрелдерин аалдаар - гостить у родственников.</li>
+            <li onclick="showExplanation('Баарлыг')"><b>Баарлыг</b> —  кара баарлыг, соок баарлыг - бессердечный, бездушный.</li>
+            <li onclick="showExplanation('Баг')"><b>Баг</b> — ремень; аркан; привязь / баг кур - кожаный ремень.</li>
+            <li onclick="showExplanation('Баажы')"><b>Баажы</b> — бергедээн, качыгдаан азы аарый берген кижи бооп мегеленири – притворство. Ооң оозу ёзулуг баажы.</li>
+            <li onclick="showExplanation('Бадыткал')"><b>Бадыткал</b> — кандыг-бир чүүлдүң шынының херечизи, барымдаазы – утверждение, подтверждение.</li>
+            <li onclick="showExplanation('Балбыгыр')"><b>Балбыгыр</b> — чөлбегер, кылын эриннерлиг, улуг. – с вытянутыми, выпяченными губами, большой.</li>
+            <li onclick="showExplanation('Бодарал')"><b>Бодарал</b> — бодараары, сайзырап нептерээри. – развитие, распространение.</li>
+            <li onclick="showExplanation('Борбак-ыяш')"><b>Борбак-ыяш</b> — далган өер ыяш өзек. – скалка для раскатывания теста.</li>
+            <li onclick="showExplanation('Буулаар')"><b>Буулаар</b> — ужуру билдинмес кылдыр узадыр алгырар, өөлээр.  –и издавать нечленораздельные протяжные звуки, реветь.</li>
+            <li onclick="showExplanation('Биеэ')"><b>Биеэ</b> — давний, былой / биеэ шагда - в давние (былые) времена.</li>
+            <li onclick="showExplanation('Бо-ла')"><b>Бо-ла</b> — 1. вот этот, лишь этот / 2. то и дело, часто/  сени бо-ла сактып кээр чордум - я тебя часто вспоминал.</li>
+            <li onclick="showExplanation('Дөңгелик')"><b>Дөңгелик</b> — кочка / дөңгелик баштаар - ходить по кочкам.</li>
+            <li onclick="showExplanation('Дагзыр')"><b>Дагзыр</b> — даалга бээр. – дать задание, поручение.</li>
+            <li onclick="showExplanation('Дагылга')"><b>Дагылга</b> — шажын ёзузу сагып, чер, суг, арга-ыяш, оттуң ээлеринге, ол ышкаш бурганга өргүл кылырының байырлалы. – религиозный праздник жертвоприношения хозяевам земли, воды, лесов, огня, а также богу.</li>
+            <li onclick="showExplanation('Дадывыр')"><b>Дадывыр</b> — кандыг-бир чүве дээш төлээн акша – взнос.</li>
+            <li onclick="showExplanation('Доозун')"><b>Доозун</b> — агаарга ужуп чоруур азы кандыг-бир чүвениң кырын шыва бээр хензиг кургаг кезекчигештер. – пыль.</li>
+            <li onclick="showExplanation('Доңар')"><b>Доңар</b> — промерзать, мёрзнуть, зябнуть / өзээн өттүр доңар - промёрзнуть до костей, промёрзнуть насквозь.</li>
+            <li onclick="showExplanation('Ёзу-чурум')"><b>Ёзу-чурум</b> — порядок, режим, распорядок / демократтыг ёзу-чурум - демократический строй.</li>
+            <li onclick="showExplanation('Иви')"><b>Иви</b> — олень / соңгу чүктүң ивизи - северный олень.</li>
+            <li onclick="showExplanation('Игил')"><b>Игил</b> — ча-биле тыртып ойнаар, ийи хылдыг хөгжүм херексели. – двухструнный, смычковой музыкальный инструмент.</li>
+            <li onclick="showExplanation('Идегел')"><b>Идегел</b> — кордал, ынаныш, бүзүрел.  – надежда, вера.</li>
+            <li onclick="showExplanation('Ийис')"><b>Ийис</b> — чааскаан эвес, эштиг төрүттүнген. – являющийся близнецом.</li>
+            <li onclick="showExplanation('Илеткел')"><b>Илеткел</b> — чогуур темага хөйнүң мурнунга кылыр делгереңгей  дыңнадыг. - доклад.</li>
+            <li onclick="showExplanation('Имилеме')"><b>Имилеме</b> — эңдерик, эңмежок. – многочисленный.</li>
+            <li onclick="showExplanation('Имиргей')"><b>Имиргей</b> — бүлүртүң, эки көзүлбес. – сумеречный.</li>
+            <li onclick="showExplanation('Идегет')"><b>Идегет</b> — чужак, чуждый элемент / бүтпес идегет - презренный враг.</li>
+            <li onclick="showExplanation('Йөрээл')"><b>Йөрээл</b> — благословение, напутствие, пожелание.</li>
+            <li onclick="showExplanation('Кагыш')"><b>Кагыш</b> — кандыг-бир чүве-биле кагары. – удар.</li>
+            <li onclick="showExplanation('Камбы')"><b>Камбы</b> — сарыг шажын хүрээзиниң улуг ламазы. – настоятель буддийского монастыря.</li>
+            <li onclick="showExplanation('Карачал')"><b>Карачал</b> — эрге-дужаал чок, лама азы хам-даа эвес, а анаа бөдүүн кижи. – простой человек.</li>
+            <li onclick="showExplanation('Кашпагай')"><b>Кашпагай</b> — шимчээри дүурген, шимченгир, авааңгыр. – быстрый в движенгия, подвижный.</li>
+            <li onclick="showExplanation('Кожаат')"><b>Кожаат</b> — кожа чоруур кижи, айбычы, чалча. – слуга, прислуга. Ооң орнунга чаа кожаат тыптып келген.</li>
+            <li onclick="showExplanation('Кожамык')"><b>Кожамык</b> — колдуунда кижиниң сагыш-сеткилин илереткен, кезектери дөрт-дөрт одуруглардан тургустунган чер-черде аңгы-аңгы аялгаларлыг, улустуң ыры.- частушка.</li>
+            <li onclick="showExplanation('Кожай')"><b>Кожай</b> — мал-маганның, эт-септиң ээзи, бай кижи. Хозяин, богач.</li>
+            <li onclick="showExplanation('Көдээ')"><b>Көдээ</b> — хоорайдан дашкаар малчыннар болгаш тараачыннар колдап ажылдап турар чер. – сельская местность.</li>
+            <li onclick="showExplanation('Куйгу')"><b>Куйгу</b> — үптекчи кижилер. - грабители.</li>
+            <li onclick="showExplanation('Кызыл-хүннээр')"><b>Кызыл-хүннээр</b> — кызыл-хүн апаар, ажып бар чыдар апаар (хүн дугайында). – закатываться.</li>
+            <li onclick="showExplanation('Кызырак')"><b>Кызырак</b> — аныяк бе. – молодая кобылица.</li>
+            <li onclick="showExplanation('Күдүр')"><b>Күдүр</b> — кыры дески эвес, эрбенниг, бөзүргей. – шерщавый, шероховатый, с мелкими неровностями на поверхности.</li>
+            <li onclick="showExplanation('Күзуңгү')"><b>Күзуңгү</b> — хамның хамнаарда холунга тудуп алыры, кыры, көрүнчүк дег кылаңнааш, калбак төгерик хүлер херексели. – круглое бронзовое зеркало шамана.</li>
+            <li onclick="showExplanation('Кыдырааш')"><b>Кыдырааш</b> — карттыг, көктеп каан, бижииринге, чуруурунга херек арыг саазыннар. – тетрадь.</li>
+            <li onclick="showExplanation('Көңгүс')"><b>Көңгүс</b> — совсем, совершенно / ол көңгүс кадык апарган - он совсем поправился.</li>
+            <li onclick="showExplanation('Көөргедир')"><b>Көөргедир</b> — выставлять напоказ / күжүн көөргедир - выставлять напоказ свою силу, бахвалиться своей силой.</li>
+            <li onclick="showExplanation('Лимби')"><b>Лимби</b> — музыкальный инструмент, похожий на флейту.</li>
+            <li onclick="showExplanation('Лаа')"><b>Лаа</b> — эривес холумактыг үстү тускай хепке кудуп каан, ортузунда өзектиг чырыткы, дең. – свечка, свеча.</li>
+            <li onclick="showExplanation('Мөңге')"><b>Мөңге</b> — вечный, бессмертный / мөңге найырал - вечная дружба.</li>
+            <li onclick="showExplanation('Мозур')"><b>Мозур</b> — кыры дески эвес, шиштегер, үндүрүк-киирик черлерлиг. – с неровной поверхностью.</li>
+            <li onclick="showExplanation('Мүн')"><b>Мүн</b> — эът азы балык дүлүп хайындырган быдаалаан суук чем, быдаа. – бульон, суп.</li>
+            <li onclick="showExplanation('Мучугур')"><b>Мучугур</b> — бопугур, дирчигир кызыл, мычыгыр. – пухлый, мясистый и красный.</li>
+            <li onclick="showExplanation('Маадыр')"><b>Маадыр</b> — герой / совет эвилелиниц маадыры - герой советского союза.</li>
+            <li onclick="showExplanation('Маажым')"><b>Маажым</b> — спокойный, уравновешенный / маажым чаң - уравновешенный характер.</li>
+            <li onclick="showExplanation('Наадым')"><b>Наадым</b> — праздник, празднество / республика малчыннарының наадымы - республиканский наадым животноводов.</li>
+            <li onclick="showExplanation('Назын')"><b>Назын</b> — возраст / чаш назын - детство.</li>
+            <li onclick="showExplanation('Нугуур')"><b>Нугуур</b> — мять / ажыткан далганны нугуур - месить тесто.</li>
+            <li onclick="showExplanation('Оваалаар')"><b>Оваалаар</b> — ссыпать в кучу, сваливать грудой / даштарны оваалап каан - камни сваляли в кучу.</li>
+            <li onclick="showExplanation('Оваарымчалыг')"><b>Оваарымчалыг</b> — осторожный; внимательный / оваарымчалыг кижи - осторожный человек.</li>
+            <li onclick="showExplanation('Оолчук')"><b>Оолчук</b> — бичии оол, аныяк оол. – мальчик, парень.</li>
+            <li onclick="showExplanation('Оора')"><b>Оора</b> — оорлу бээр кылдыр. - . ломая, сворачивая.</li>
+            <li onclick="showExplanation('Өлчей')"><b>Өлчей</b> — аас-кежик. – счастье.</li>
+            <li onclick="showExplanation('Өндүр')"><b>Өндүр</b> — аажок улуг, кайгамчык улуг. – очень большой, великий.</li>
+            <li onclick="showExplanation('Өң')"><b>Өң</b> — цвет, окраска; оттенок / кызыл өң - расный цвет.</li>
+            <li onclick="showExplanation('Өй-тап')"><b>Өй-тап</b> — умеренный / өй-тап климат - умеренный климат.</li>
+            <li onclick="showExplanation('Пүү')"><b>Пүү</b> — межд. выражает презрение / пүү-хайт, мелегейин але! - тьфу, какой глупый!.</li>
+            <li onclick="showExplanation('Паак')"><b>Паак</b> — выражает сожаление, удивление / паак, улуг хирезинде бичиизинге күш четпеди - ай-ай, хотя и большой, а не мог перебороть маленького.</li>
+            <li onclick="showExplanation('Сөөк')"><b>Сөөк</b> — кость / чарт сөөк - твёрдая (крепкая) кость.</li>
+            <li onclick="showExplanation('Саадак')"><b>Саадак</b> — кижи чүктеп чоруур кылып каан хөм согун хавы, аңчы хап. – охотничья сумка.</li>
+            <li onclick="showExplanation('Сургакчылаар')"><b>Сургакчылаар</b> — Кандыг-бир албан чериниң даалгазын куусеттирип чорук чоруур – быть  в служебной командировке.</li>
+            <li onclick="showExplanation('Төөгү')"><b>Төөгү</b> — история / бурунгу төөгү - древняя история.</li>
+            <li onclick="showExplanation('Теве')"><b>Теве</b> — верблюд / теве дүгү - верблюжья шерсть.</li>
+            <li onclick="showExplanation('Үдээр')"><b>Үдээр</b> — провожать / аалчыларны үдээр - провожать гостей.</li>
+            <li onclick="showExplanation('Уг')"><b>Уг</b> — направление / бо угда, бо уг-биле - в этом направлении.</li>
+            <li onclick="showExplanation('Үгү')"><b>Үгү</b> — филин / үгү-араатан куш - филин – хищная птица.</li>
+            <li onclick="showExplanation('Хөөгер')"><b>Хөөгер</b> — пронестись, промчаться / чылгы хөөге берген - промчался табун.</li>
+            <li onclick="showExplanation('Чүүлдүг')"><b>Чүүлдүг</b> — подходящий; правильный / чүүлдүг деп көөр - считать подходящим, одобрять.</li>
+            <li onclick="showExplanation('Шүүгү')"><b>Шүүгү</b> — суд, юстиция / шүугү харыысалгазынга онааштырар - привлекать к судебной ответственности.</li>
+            <li onclick="showExplanation('Шүүт')"><b>Шүүт</b> — хлопоты, возня / шүүт үндүрер - доставлять хлопоты, затруднять, беспокоить.</li>
+            <li onclick="showExplanation('Ыңгыр-шыңгыр')"><b>Ыңгыр-шыңгыр</b> — звукоподражание звону металла / ыңгыр-шыңгыр бажында загадка (нечто) звенящее на голове.</li>
+            <li onclick="showExplanation('Эң')"><b>Эң</b> — самый / эң улуг самый большой, наибольший.</li>
+            <li onclick="showExplanation('Эвээш')"><b>Эвээш</b> — мало, меньше / эвээш кезии - меньшая часть.</li>
+            <li onclick="showExplanation('Яамы')"><b>Яамы</b> — министерство.</li>
+            <li onclick="showExplanation('Ядараңгай')"><b>Ядараңгай</b> — бедный / ядараңгай үнүш - скудная растительность.</li>
+        </ul>
+
+        <!-- окно выскакивающее -->
+        <div id="explanationModal" class="modal" style="display:none; position:fixed; left:0; top:0; width:100vw; height:100vh; background:rgba(0,0,0,0.3); align-items:center; justify-content:center;">
+            <div class="modal-content" style="background:white; color:#8A9A5B; padding:2rem; border-radius:8px; max-width:400px; margin:auto; position:relative;">
+                <span class="close" onclick="closeExplanationModal()" style="position:absolute; right:1rem; top:1rem; cursor:pointer; font-size:1.5rem;">&times;</span>
+                <p id="explanationText">Пояснение по выбранному слову</p>
+                <!-- Добавленный аудиоплеер -->
+                <audio id="explanationAudio" controls style="width:100%; margin-top:1rem; display:none;">
+                    Ваш браузер не поддерживает аудио элемент.
+                </audio>
+            </div>
+        </div>
+
+        <!-- часть с викториной -->
+        <div class="quiz">
+            <p id="question">Вопрос: А вы знаете, как правильно выставить ударение в слове <b>ЕРЕТИК</b>?</p>
+            <div id="answerOptions">
+                <button onclick="checkAnswer('correct', 'новое слово 1')">Вариант ответа 1</button>
+                <span style="margin:0 1rem;">или</span>
+                <button onclick="checkAnswer('incorrect', 'новое слово 2')">Вариант ответа 2</button>
+            </div>
+        </div>
+        <div id="result" style="margin-top:1rem;"></div>
+    </section>
+
+    <footer>
+        Мультимедийный словарь тувинского языка.<br />
+        2025. Все права защищены<br /><br />
+        Для справок: <a href="mailto:tuv.world@mail.ru" style="color:#a4d3a2;">tuv.world@mail.ru</a>
+    </footer>
+
+    <script>
+        // поиск слов без учета регистра скрипт
+        function search() {
+            let input = document.getElementById('searchInput').value.toLowerCase();
+            let items = document.querySelectorAll('#wordList li');
+            items.forEach(function (li) {
+                let word = li.innerText.toLowerCase();
+                li.style.display = word.includes(input) ? '' : 'none';
+            });
+        }
+
+        // окно выскакивающее скрипт
+        function showExplanation(word) {
+            document.getElementById('explanationText').innerText = getExplanation(word);
+
+            // Добавление аудио
+            const audioElement = document.getElementById('explanationAudio');
+            const audioSrc = getAudioSource(word);
+
+            if (audioSrc) {
+                audioElement.src = audioSrc;
+                audioElement.style.display = 'block';
+            } else {
+                audioElement.style.display = 'none';
+            }
+
+            document.getElementById('explanationModal').style.display = 'flex';
+        }
+
+        function closeExplanationModal() {
+            document.getElementById('explanationModal').style.display = 'none';
+            // Останавливаем аудио при закрытии
+            const audioElement = document.getElementById('explanationAudio');
+            audioElement.pause();
+            audioElement.currentTime = 0;
+        }
+
+        function getExplanation(word) {
+            const wordExplanations = {
+                "Аа-чаза": "Дайзынны аа-чаза согар - Беспощадно бить врага.",
+                "Аажок": "Ол уруг диизинге аажок ынак - Эта девочка очень любит своего кота.",
+                "Аажы-чаң": "Аажы-чаңы дыка берге - характер очень сложный.",
+                "Аажылаар": "Кырган-авам меңээ эки аажылаар - Бабушкахорошо со мной обращается.",
+                "Аажылаашкын": "Кайгал-оол эки аажылаашкын кылган - Кайгал-оол совершил хороший поступок.",
+                "Аазаар": "Авамга бо улдуңда эки демдектер аазаан мен - Я маме обещал хорошие оценки в этой четверти.",
+                "Аайлажыр": "Дуун акымны бажын иштин аайлажыр кылдыр диледим - Вчера попросила брата помочь прибраться по дому.",
+                "Аал": "Аалдыг мен - У меня есть селение.",
+                "Аалдар": "Силерже аалдап чедер бис албан - Мы обязательно придем гостить к вам.",
+                "Үгү": "Кежээ үгү көрдум - Вечером видел(а) филина.",
+                "Аң": "Тайгада аңнар халчып турар - В тайге бегают звери.",
+                "Баарлыг": "Кара баарлыг кижи дир - Бессердечный этот человек.",
+                "Баг": "Кара баг курну шарып ал - Завяжи черный кожаный ремень.",
+                "Биеэ": "Биеэ шагда бижээн төөгү - История, написанная в былые времена.",
+                "Бо-ла": "Бо-ла башка кирер состер - Слова, что часто приходят в голову.",
+                "Доңар": "Доңар эвес бис, чоруулуңар - Не будем же мы мерзнуть, уходим.",
+                "Ёзу-чурум": "Школага ёзу-чурум үревес! - В школе порядок не рушим!.",
+                "Иви": "Ивилер дыка чараш - Олени очень красивые.",
+                "Назын": "Чаш назыннымда Тээлиге дыштаныр чораан мен - Я в детстве отдыхал в Тээли.",
+                "Маадыр": "Тываның маадыры - Герой Тувы.",
+                //
+                "Аазадаш": "Өгнүң эжии аазадаш кылынды.",
+                "Аазакчы": "Ыяш чарып бээр болган аазакчым үнгеш, чиде берди…",
+                "Аайлаар": "Кээримге, уруглар бажың ишти аайлаан, аштаан, чугдунган тур.",
+                "Аак-маак": "Аак-маак четпээнде аг-шериг хаанның инек сүрүүн бөле шаап экеп-тир эвеспе (тоолдан).",
+                "Аалчы": "Аалчы кижи алыскак, анайлыг өшкү өдүген.",
+                "Аас-кежик": "Кижилер аас-кежикке чаңчыга берип болур.",
+                "Ажал": "Иениң ажалын чүгле кускун оглу чандырган деп легенда бар.",
+                "Албанчы": "Бо албанчының ажылы хөй.",
+                "Анай-кара": "Анай-кара кады чорда, агым мен дээш суглар канчаар.",
+                "Анай-хаак": "НЕТ",//нет комментария
+                "Баажы": "Ооң оозу ёзулуг баажы.",
+                "Бадыткал": "Ол болза ооң ынакшылының  бадыткалы.",
+                "Балбыгыр": "Балбыгыр аксындан чугаа үнмээди.",
+                "Бодарал": "Чаяакчы күш бодаралы.",
+                "Борбак-ыяш": "Далган өйүп турган борбак-ыяжы-биле сопту.",
+                "Буулаар": "Ооң буулаан ыыдындан шылай берген.",
+                "Дагзыр": "Акым мени бо-ла дагзыр чораан.",
+                "Дагылга": "НЕТ",//нет комментария
+                "Дадывыр": "Оюн ойнаарда баштай дадывыр бээр.",
+                "Доозун": "Бичии-ле доозун сомазы көзүлзе, согуй кааптар.",
+                "Игил": "Ачам игил садып берген.",
+                "Идегел": "Идегелди чаалап алыр.",
+                "Ийис": "Мээң ийис эштерим бар.",
+                "Илеткел": "Эртенги кичээлге илеткел кылып олур бис.",
+                "Имилеме": "Имилеме ажы-төл.",
+                "Имиргей": "Имиргей деп чүвезин.",
+                "Кагыш": "Селеме кагыжындан артып калган ис.",
+                "Камбы": "Даарта камбыга ужуражыр мен.",
+                "Карачал": "Авам мени карачал кижиге деңнеди.",
+                "Кашпагай": "Ол кашпагай болгаш, ажылды дораан доозуптую.",
+                "Сургакчылаар": "Ол өске кожуунче сургакчылаар дээш чорупту.",
+                "Кожаат": "Ооң орнунга чаа кожаат тыптып келген.",
+                "Кожамык": "Ол меңээ кожамык ырлап берген. ",
+                "Кожай": "Мээң өгбелерим кожай улус чораан.",
+                "Көдээ": "Ак-кыс көдээден чедип келген.",
+                "Куйгу": "Бир дүне куйгу хоюм уптеп алгаш барып-тыр.",
+                "Кызыл-хүннээр": "Чайгы сарыг үн кызыл-хүннеп чыдыр.",
+                "Кызырак": "Эмдик кызырак өөредип тур акым.",
+                "Лаа": "Кежээ авам лаа кыссып каан.",
+                "Саадак": "Ачам саадаан чүктеп алгаш тайгаже углады.",
+                "Күдүр": "Ооң адыштарының ишти күдүр кара.",
+                "Күзуңгү": "Хам кижи күзүнгүзүн сонуургадып көргүскен.",
+                "Кыдырааш": "Эжимден кыдырааш дилеп алдым.",
+                "Мозур": "Мозур хая кырында кылаштап чор бис.",
+                "Мүн": "Авам  эъттиг мүн кудуп берди.",
+                "Мучугур": "Ооң шырайы мучугур деп эскерген мен.",
+                "Оолчук": "Ол оолчук оожум чугааланган.",
+                "Оора": "Тооруктарны оора тыртып, черже бадырып турган.",
+                "Өлчей": "Ам силерге өлчей хайырлаар.",
+                "Өндүр": "Улустуң эң-не өндүр  күзелдери бүдүуп турган."
+            };
+            return wordExplanations[word/*.toLowerCase()*/] || "Объяснение для этого слова отсутствует";
+        }
+
+        // Функция для получения пути к аудиофайлу
+        function getAudioSource(word) {
+            const audioSources = {
+                "Аазадаш": "../media/гс1.mp3",
+                "Аазакчы": "../media/гс2.mp3",
+                "Аайлаар": "../media/гс3.mp3",
+                "Аак-маак": "../media/гс4.mp3",
+                "Аалчы": "../media/гс5.mp3",
+                "Аас-кежик": "../media/гс6.mp3",
+                "Ажал": "../media/гс7.mp3",
+                "Албанчы": "../media/гс8.mp3",
+                "Анай-кара": "../media/гс9.mp3",
+                "Анай-хаак": "../media/гс10.mp3",
+                "Баажы": "../media/гс11.mp3",
+                "Бадыткал": "../media/гс12.mp3",
+                "Балбыгыр": "../media/гс13.mp3",
+                "Бодарал": "../media/гс14.mp3",
+                "Борбак-ыяш": "../media/гс15.mp3",
+                "Буулаар": "../media/гс16.mp3",
+                "Дагзыр": "../media/гс17.mp3",
+                "Дагылга": "../media/гс18.mp3",
+                "Дадывыр": "../media/гс19.mp3",
+                "Доозун": "../media/гс20.mp3",
+                "Игил": "../media/гс21.mp3",
+                "Идегел": "../media/гс22.mp3",
+                "Ийис": "../media/гс23.mp3",
+                "Илеткел": "../media/гс24.mp3",
+                "Имилеме": "../media/гс25.mp3",
+                "Имиргей": "../media/гс26.mp3",
+                "Кагыш": "../media/гс27.mp3",
+                "Камбы": "../media/гс28.mp3",
+                "Карачал": "../media/гс29.mp3",
+                "Кашпагай": "../media/гс30.mp3",
+                "Сургакчылаар": "../media/гс31.mp3",
+                "Кожаат": "../media/гс32.mp3",
+                "Кожамык": "../media/гс33.mp3",
+                "Кожай": "../media/гс34.mp3",
+                "Көдээ": "../media/гс35.mp3",
+                "Куйгу": "../media/гс36.mp3",
+                "Кызыл-хүннээр": "../media/гс37.mp3",
+                "Кызырак": "../media/гс38.mp3",
+                "Лаа": "../media/гс39.mp3",
+                "Саадак": "../media/гс40.mp3",
+                "Күдүр": "../media/гс41.mp3",
+                "Күзуңгү": "../media/гс42.mp3",
+                "Кыдырааш": "../media/гс43.mp3",
+                "Мозур": "../media/гс44.mp3",
+                "Мүн": "../media/гс45.mp3",
+                "Мучугур": "../media/гс46.mp3",
+                "Оолчук": "../media/гс47.mp3",
+                "Оора": "../media/гс48.mp3",
+                "Өлчей": "../media/гс49.mp3",
+                "Өндүр": "../media/гс50.mp3"
+            };
+            return audioSources[word/*.toLowerCase()*/] || "";
+        }
+
+        // сортировка слов по алфавиту при загрузке
+        function sortWordsAlphabetically() {
+            var wordList = document.getElementById("wordList");
+            var words = Array.from(wordList.getElementsByTagName("li"));
+            words.sort(function (a, b) {
+                return a.textContent.localeCompare(b.textContent);
+            });
+            // чистка списка доавбление отсортированных слов
+            wordList.innerHTML = "";
+            words.forEach(function (li) {
+                wordList.appendChild(li);
+            });
+        }
+
+        // сама викторина вопросы ответы прав вариант
+        let questions = [
+            {
+                question: "А вы знаете, как правильно переводится слово ОВАЛААР?",
+                answers: ["сваливать грудой", "ссылать в село"],
+                correct: "сваливать грудой"
+            },
+            {
+                question: "А вы знаете, как правильно переводится слово ИВИ?",
+                answers: ["олень", "бык"],
+                correct: "олень"
+            },
+            {
+                question: "А вы знаете, как правильно переводится слово НААДЫМ?",
+                answers: ["праздник", "концерт"],
+                correct: "праздник"
+            },
+            {
+                question: "А вы знаете, как правильно переводится слово ИДЕГЕТ?",
+                answers: ["надежда", "чужак"],
+                correct: "чужак"
+            },
+            {
+                question: "А вы знаете, как правильно переводится слово ААЗААР?",
+                answers: ["сулить", "обманывать"],
+                correct: "сулить"
+            },
+            {
+                question: "А вы знаете, как правильно переводится слово БААРЛЫГ?",
+                answers: ["бездушный", "добрый"],
+                correct: "бездушный"
+            },
+            {
+                question: "А вы знаете, как правильно переводится слово БАГ?",
+                answers: ["багаж", "ремень"],
+                correct: "ремень"
+            },
+            {
+                question: "А вы знаете, как правильно переводится слово ААЖОК?",
+                answers: ["провод", "сильно"],
+                correct: "сильно"
+            },
+            {
+                question: "А вы знаете, как правильно переводится слово ААЛ?",
+                answers: ["мальчик", "селение"],
+                correct: "селение"
+            },
+            {
+                question: "А вы знаете, как правильно переводится слово аа-чаза?",
+                answers: ["жестоко", "поведение"],
+                correct: "жестоко"
+            }
+        ];
+        let currentQuestion = 0;
+
+        function showQuestion() {
+            document.getElementById('question').innerText = questions[currentQuestion].question;
+            let answerOptions = "";
+            for (let i = 0; i < questions[currentQuestion].answers.length; i++) {
+                answerOptions += "<button onclick=\"checkAnswer('" + questions[currentQuestion].answers[i] + "')\">" + questions[currentQuestion].answers[i] + "</button>";
+            }
+            document.getElementById('answerOptions').innerHTML = answerOptions;
+            document.getElementById('result').innerText = "";
+        }
+
+        function checkAnswer(response) {
+            let correct = questions[currentQuestion].correct;
+            let res = document.getElementById('result');
+            if (response === correct) {
+                res.innerHTML = "Правильно!";
+                currentQuestion++;
+                if (currentQuestion < questions.length) {
+                    setTimeout(showQuestion, 1000);
+                } else {
+                    setTimeout(function () {
+                        res.innerHTML = "Это был последний вопрос! Благодарим за интерес!";
+                        document.getElementById('answerOptions').innerHTML = "";
+                        document.getElementById('question').innerText = "";
+                    }, 1000);
+                }
+            } else {
+                res.innerHTML = "Неверно! Попробуйте ещё раз.";
+            }
+        }
+
+        // запуск функций после загрузки страницы
+        window.onload = function () {
+            sortWordsAlphabetically();
+            showQuestion();
+        };
+    </script>
+</body>
+</html>
